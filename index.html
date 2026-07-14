@@ -262,6 +262,14 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
 .rule-ico{font-size:20px;flex-shrink:0}
 .rule-txt{font-size:12px;color:var(--text2);line-height:1.6}
 .hidden{display:none!important}
+.tab-disabled{opacity:0.35;cursor:not-allowed;pointer-events:none;}
+.test-start-screen{max-width:500px;margin:40px auto;text-align:center;padding:40px;background:var(--bg2);border:1px solid var(--border);border-radius:16px;}
+.test-start-icon{font-size:48px;margin-bottom:16px;}
+.test-start-title{font-size:22px;font-weight:700;margin-bottom:24px;}
+.test-start-info{background:var(--bg3);border-radius:10px;padding:16px;margin-bottom:8px;text-align:left;}
+.test-start-row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px;color:var(--text2);}
+.test-start-row:last-child{border-bottom:none;}
+.test-start-row strong{color:var(--text);}
 
 /* READING PROGRESS - fixed bottom */
 #reading-progress-wrap{
@@ -6894,7 +6902,7 @@ const MOD_TASKS={
 };
 
 // ── STATE ──
-let S={user:null,login:null,page:'home',module:null,tab:'theory',ts:{},progress:{},notes:{},tasks:{},theme:'dark'};
+let S={user:null,login:null,page:'home',module:null,tab:'theory',ts:{},progress:{},notes:{},tasks:{},theme:'dark',testActive:false};
 
 function loadS(){
   const raw=localStorage.getItem('slp_v3');
@@ -6955,7 +6963,7 @@ function isUnlocked(id){
   const ps=S.progress[prev];
   return ps&&(ps.status==='done'||ps.status==='warn');
 }
-function tryModule(id){showModule(id,!isUnlocked(id));}
+function tryModule(id){if(S.testActive)return;showModule(id,!isUnlocked(id));}
 
 // ── INIT ──
 function initApp(){
@@ -6988,6 +6996,7 @@ function updateSidebar(){
 
 // ── NAV ──
 function showPage(page){
+  if(S.testActive) return;
   S.page=page; S.module=null;
   const wrap=document.getElementById('reading-progress-wrap');
   if(wrap) wrap.style.display='none';
@@ -7016,6 +7025,8 @@ function showModule(id,locked){
   renderModulePage(id,locked);
 }
 function switchTab(tab){
+  // Block navigation if test is active
+  if(S.testActive && tab!=='test') return;
   S.tab=tab;
   const wrap=document.getElementById('reading-progress-wrap');
   const fill=document.getElementById('reading-progress-fill');
@@ -7137,21 +7148,60 @@ function pickQ(id,n){
   for(let i=bank.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[bank[i],bank[j]]=[bank[j],bank[i]];}
   return bank.slice(0,Math.min(n,bank.length));
 }
+function startTest(id){
+  const tc=document.getElementById('tab-content');
+  if(!tc)return;
+  const qs=pickQ(id,15);
+  S.ts[id]={qs,cur:0,answers:{},checked:{},score:0,wrongs:[]};
+  S.testActive=true;
+  // Disable theory and practice tabs
+  document.querySelectorAll('.tab').forEach(el=>{
+    if(el.dataset.t!=='test') el.classList.add('tab-disabled');
+  });
+  const m=MODULE_META[id];
+  tc.innerHTML=`<div class="test-wrap"><div class="test-hdr"><div class="test-hdr-title">Тест: ${m.title}</div><div class="test-hdr-cnt" id="tcnt-${id}">Вопрос 1 из ${qs.length}</div></div>
+  ${qs.map((q,qi)=>`<div class="q-card ${qi===0?'active':''}" id="qc-${id}-${qi}"><div class="q-num">ВОПРОС ${qi+1} из ${qs.length}</div><div class="q-text">${q.q}</div><div class="q-opts">${q.opts.map((opt,oi)=>`<div class="q-opt" id="qo-${id}-${qi}-${oi}" onclick="selOpt('${id}',${qi},${oi})"><div class="q-radio"><div class="q-radio-dot"></div></div>${opt}</div>`).join('')}</div><div class="q-exp" id="qe-${id}-${qi}">${q.exp}</div></div>`).join('')}
+  <div class="result-card" id="res-${id}"></div>
+  <div class="test-nav" id="tnav-${id}"><button class="btn btn-blue" id="tchk-${id}" onclick="checkAns('${id}')" disabled>Проверить</button><button class="btn btn-ghost hidden" id="tnxt-${id}" onclick="nextQ('${id}')">Следующий →</button></div></div>`;
+}
+function startTest(id){
+  const tc=document.getElementById('tab-content');
+  if(!tc)return;
+  const qs=pickQ(id,15);
+  S.ts[id]={qs,cur:0,answers:{},checked:{},score:0,wrongs:[]};
+  S.testActive=true;
+  document.querySelectorAll('.tab').forEach(el=>{
+    if(el.dataset.t!=='test') el.classList.add('tab-disabled');
+  });
+  const m=MODULE_META[id];
+  tc.innerHTML=`<div class="test-wrap"><div class="test-hdr"><div class="test-hdr-title">Тест: ${m.title}</div><div class="test-hdr-cnt" id="tcnt-${id}">Вопрос 1 из ${qs.length}</div></div>
+  ${qs.map((q,qi)=>`<div class="q-card ${qi===0?'active':''}" id="qc-${id}-${qi}"><div class="q-num">ВОПРОС ${qi+1} из ${qs.length}</div><div class="q-text">${q.q}</div><div class="q-opts">${q.opts.map((opt,oi)=>`<div class="q-opt" id="qo-${id}-${qi}-${oi}" onclick="selOpt('${id}',${qi},${oi})"><div class="q-radio"><div class="q-radio-dot"></div></div>${opt}</div>`).join('')}</div><div class="q-exp" id="qe-${id}-${qi}">${q.exp}</div></div>`).join('')}
+  <div class="result-card" id="res-${id}"></div>
+  <div class="test-nav" id="tnav-${id}"><button class="btn btn-blue" id="tchk-${id}" onclick="checkAns('${id}')" disabled>Проверить</button><button class="btn btn-ghost hidden" id="tnxt-${id}" onclick="nextQ('${id}')">Следующий →</button></div></div>`;
+}
 function renderTestUI(id){
   const p=S.progress[id]||{};
   const now=Date.now();
   if(p.blocked)return`<div class="block-overlay"><div class="ico">🚫</div><h3>Доступ заблокирован</h3><p>Результат ниже 50%. Для продолжения нужно разрешение куратора.</p></div>`;
   if(p.retryAfter&&now<p.retryAfter){
-    const rem=p.retryAfter-now,h=Math.floor(rem/3600000),m=Math.floor((rem%3600000)/60000);
-    return`<div class="retry-timer"><div class="ico">⏳</div><h3>Пересдача через</h3><div class="timer-val">${h}ч ${m}мин</div><p>Вы набрали ${p.lastScore}%. Через 2 дня — новые вопросы. Попытка ${p.attempts} из 3.</p></div>`;
+    const rem=p.retryAfter-now,h=Math.floor(rem/3600000),m2=Math.floor((rem%3600000)/60000);
+    return`<div class="retry-timer"><div class="ico">⏳</div><h3>Пересдача через</h3><div class="timer-val">${h}ч ${m2}мин</div><p>Вы набрали ${p.lastScore}%. Через 2 дня — новые вопросы. Попытка ${p.attempts} из 3.</p></div>`;
   }
-  const qs=pickQ(id,15);
-  S.ts[id]={qs,cur:0,answers:{},checked:{},score:0,wrongs:[]};
   const m=MODULE_META[id];
-  return`<div class="test-wrap"><div class="test-hdr"><div class="test-hdr-title">Тест: ${m.title}</div><div class="test-hdr-cnt" id="tcnt-${id}">Вопрос 1 из ${qs.length}</div></div>
-  ${qs.map((q,qi)=>`<div class="q-card ${qi===0?'active':''}" id="qc-${id}-${qi}"><div class="q-num">ВОПРОС ${qi+1} из ${qs.length}</div><div class="q-text">${q.q}</div><div class="q-opts">${q.opts.map((opt,oi)=>`<div class="q-opt" id="qo-${id}-${qi}-${oi}" onclick="selOpt('${id}',${qi},${oi})"><div class="q-radio"><div class="q-radio-dot"></div></div>${opt}</div>`).join('')}</div><div class="q-exp" id="qe-${id}-${qi}">${q.exp}</div></div>`).join('')}
-  <div class="result-card" id="res-${id}"></div>
-  <div class="test-nav" id="tnav-${id}"><button class="btn btn-blue" id="tchk-${id}" onclick="checkAns('${id}')" disabled>Проверить</button><button class="btn btn-ghost hidden" id="tnxt-${id}" onclick="nextQ('${id}')">Следующий →</button></div></div>`;
+  const attempts=p.attempts||0;
+  const attemptNote=attempts>0?`<p style="color:var(--text2);font-size:13px;margin-top:8px">Предыдущих попыток: ${attempts}. Лучший результат: ${p.score||0}%</p>`:'';
+  return`<div class="test-start-screen">
+    <div class="test-start-icon">📝</div>
+    <h2 class="test-start-title">Тест: ${m.title}</h2>
+    <div class="test-start-info">
+      <div class="test-start-row"><span>Вопросов</span><strong>15</strong></div>
+      <div class="test-start-row"><span>Выборка из банка</span><strong>20 вопросов</strong></div>
+      <div class="test-start-row"><span>Проходной балл</span><strong>70%</strong></div>
+      <div class="test-start-row"><span>Навигация</span><strong>заблокирована до завершения</strong></div>
+    </div>
+    ${attemptNote}
+    <button class="btn btn-green" style="margin-top:24px;padding:14px 40px;font-size:15px" onclick="startTest('${id}')">Начать тест →</button>
+  </div>`;
 }
 function selOpt(id,qi,oi){
   const ts=S.ts[id];if(!ts||ts.checked[qi])return;
@@ -7212,6 +7262,9 @@ function showResult(id){
     btns=`<button class="btn btn-green" onclick="completeModule('${id}')">Завершить и открыть следующий →</button>`;
   }
   saveS(); sendTG(id,pct,ts.wrongs);
+  // Unlock navigation after test completes
+  S.testActive=false;
+  document.querySelectorAll('.tab').forEach(el=>el.classList.remove('tab-disabled'));
   const pc=pct>=85?'pct-green':pct>=70?'pct-warn':'pct-red';
   document.getElementById(`res-${id}`).style.display='block';
   document.getElementById(`res-${id}`).innerHTML=`<div class="result-pct ${pc}">${pct}%</div><div class="result-label">${statusMsg}</div><div class="result-sub">${ts.score} из ${total} правильных</div>${extraHtml}<div class="result-btns"><button class="btn btn-ghost" onclick="switchTab('test');document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('active',i===2))">Попробовать снова</button>${btns}</div>`;
